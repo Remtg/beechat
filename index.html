@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>BeeChat - 在线聊天室</title>
+<style>
+:root {
+  --bg: #f0f2f5;
+  --surface: #ffffff;
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --text: #1e293b;
+  --text-secondary: #64748b;
+  --border: #e2e8f0;
+  --danger: #ef4444;
+  --success: #22c55e;
+  --shadow: 0 1px 3px rgba(0,0,0,0.08);
+  --shadow-lg: 0 10px 25px rgba(0,0,0,0.1);
+  --radius: 12px;
+  --radius-sm: 8px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html,body { height:100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background:var(--bg); color:var(--text); }
+
+.app { display:flex; flex-direction:column; height:100%; max-width:800px; margin:0 auto; background:var(--surface); box-shadow:var(--shadow-lg); }
+
+.header { display:flex; align-items:center; justify-content:space-between; padding:12px 16px; background:var(--primary); color:#fff; flex-shrink:0; }
+.header h1 { font-size:18px; font-weight:700; letter-spacing:-0.3px; }
+.header .right { display:flex; align-items:center; gap:8px; }
+.header .online { font-size:12px; opacity:0.85; background:rgba(255,255,255,0.2); padding:3px 10px; border-radius:20px; }
+
+.messages { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:6px; }
+.messages::-webkit-scrollbar { width:5px; }
+.messages::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:10px; }
+
+.msg { display:flex; flex-direction:column; max-width:80%; padding:10px 14px; border-radius:var(--radius); animation: fadeIn 0.25s ease; word-break:break-word; }
+@keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+.msg-self { align-self:flex-end; background:var(--primary); color:#fff; border-bottom-right-radius:4px; }
+.msg-other{ align-self:flex-start; background:var(--surface); color:var(--text); border-bottom-left-radius:4px; box-shadow:var(--shadow); }
+.msg .text { font-size:15px; line-height:1.5; }
+.msg .meta-row { display:flex; align-items:center; gap:6px; margin-top:4px; font-size:10px; opacity:0.5; }
+.msg-other .meta-row { justify-content:flex-start; }
+.msg .ip-tag { color:var(--primary); }
+.msg-image { max-width:220px; max-height:220px; border-radius:var(--radius-sm); cursor:pointer; display:block; margin-top:4px; }
+.msg-image:hover { transform:scale(1.02); transition:transform 0.2s; }
+
+.system-msg { text-align:center; font-size:12px; color:var(--text-secondary); padding:4px 0; opacity:0.7; }
+
+.input-area { display:flex; align-items:flex-end; gap:8px; padding:12px 16px; border-top:1px solid var(--border); background:var(--surface); flex-shrink:0; }
+.input-area textarea { flex:1; border:1px solid var(--border); border-radius:24px; padding:10px 16px; font-size:14px; resize:none; outline:none; font-family:inherit; line-height:1.4; max-height:120px; }
+.input-area textarea:focus { border-color:var(--primary); }
+
+.btn { border:none; border-radius:50%; width:40px; height:40px; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:18px; flex-shrink:0; }
+.btn-send { background:var(--primary); color:#fff; }
+.btn-send:hover { background:var(--primary-hover); }
+.btn-img { background:var(--bg); color:var(--text-secondary); }
+.btn-img:hover { background:#e2e8f0; color:var(--primary); }
+
+.img-preview { position:relative; display:inline-block; margin-bottom:8px; }
+.img-preview img { max-width:100px; max-height:100px; border-radius:var(--radius-sm); border:1px solid var(--border); }
+.img-preview .remove-btn { position:absolute; top:-6px; right:-6px; width:22px; height:22px; border-radius:50%; background:var(--danger); color:#fff; border:none; cursor:pointer; font-size:12px; line-height:1; }
+
+.admin-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.45); display:none; align-items:center; justify-content:center; z-index:100; }
+.admin-overlay.active { display:flex; }
+.admin-panel { background:var(--surface); border-radius:var(--radius); width:92%; max-width:550px; max-height:85vh; box-shadow:var(--shadow-lg); overflow:hidden; display:flex; flex-direction:column; }
+.admin-panel .panel-header { padding:14px 16px; background:var(--primary); color:#fff; display:flex; align-items:center; justify-content:space-between; }
+.admin-panel .panel-header h2 { font-size:16px; }
+.admin-panel .panel-body { padding:16px; overflow-y:auto; flex:1; }
+
+.admin-section { margin-bottom:18px; }
+.admin-section h3 { font-size:13px; margin-bottom:8px; color:var(--text-secondary); font-weight:600; }
+
+.admin-msg { display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid var(--border); }
+.admin-msg .content { flex:1; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.admin-msg .ip { font-size:11px; color:var(--primary); font-family:monospace; white-space:nowrap; min-width:100px; }
+.admin-msg .meta { font-size:11px; color:var(--text-secondary); white-space:nowrap; }
+
+.online-user { display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--border); font-size:13px; }
+.online-user .dot { width:8px; height:8px; border-radius:50%; background:var(--success); flex-shrink:0; }
+.online-user .id { color:var(--text-secondary); font-size:12px; }
+.online-user .ip { color:var(--primary); font-family:monospace; margin-left:auto; font-size:12px; }
+
+.btn-sm { border:none; border-radius:var(--radius-sm); padding:5px 12px; font-size:12px; cursor:pointer; font-family:inherit; }
+.btn-danger { background:var(--danger); color:#fff; }
+.btn-danger:hover { background:#dc2626; }
+
+.login-form { display:flex; flex-direction:column; gap:12px; }
+.login-form h3 { font-size:18px; text-align:center; }
+.login-form input { padding:10px 14px; border:1px solid var(--border); border-radius:var(--radius-sm); font-size:14px; outline:none; font-family:inherit; }
+.login-form input:focus { border-color:var(--primary); }
+.login-form .btn-login { background:var(--primary); color:#fff; border:none; border-radius:var(--radius-sm); padding:10px; font-size:14px; cursor:pointer; font-family:inherit; }
+.login-form .btn-login:hover { background:var(--primary-hover); }
+.login-form .error { color:var(--danger); font-size:13px; text-align:center; }
+
+.toast { position:fixed; top:20px; left:50%; transform:translateX(-50%); background:#1e293b; color:#fff; padding:10px 20px; border-radius:24px; font-size:14px; z-index:200; opacity:0; transition:opacity 0.3s; pointer-events:none; }
+.toast.show { opacity:1; }
+
+.lightbox { position:fixed; inset:0; background:rgba(0,0,0,0.92); display:none; align-items:center; justify-content:center; z-index:300; cursor:pointer; }
+.lightbox.active { display:flex; }
+.lightbox img { max-width:90vw; max-height:90vh; object-fit:contain; border-radius:4px; }
+
+.btn-admin { border:none; background:rgba(255,255,255,0.2); color:#fff; padding:4px 12px; border-radius:16px; font-size:12px; cursor:pointer; font-family:inherit; }
+.btn-admin:hover { background:rgba(255,255,255,0.35); }
+
+.empty,.connecting { text-align:center; padding:40px 20px; font-size:14px; }
+.empty { color:var(--text-secondary); }
+.connecting { color:var(--primary); }
+
+.spinner { display:inline-block; width:18px; height:18px; border:2px solid #e2e8f0; border-top-color:var(--primary); border-radius:50%; animation:spin 0.6s linear infinite; vertical-align:middle; margin-right:6px; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.nickname-tag { font-size:11px; font-weight:600; opacity:0.8; margin-bottom:2px; }
+.msg-other .nickname-tag { color:var(--primary); }
+
+.nickname-modal { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:500; }
+.nickname-box { background:var(--surface); border-radius:var(--radius); padding:24px; width:90%; max-width:360px; box-shadow:var(--shadow-lg); }
+.nickname-box h3 { text-align:center; margin-bottom:16px; font-size:16px; }
+.nickname-box input { width:100%; padding:10px 14px; border:1px solid var(--border); border-radius:var(--radius-sm); font-size:14px; outline:none; font-family:inherit; }
+.nickname-box input:focus { border-color:var(--primary); }
+.nickname-box button { width:100%; margin-top:12px; padding:10px; background:var(--primary); color:#fff; border:none; border-radius:var(--radius-sm); font-size:14px; cursor:pointer; font-family:inherit; }
+.nickname-box button:hover { background:var(--primary-hover); }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="header">
+    <h1>BeeChat</h1>
+    <div class="right">
+      <span class="online" id="onlineCount">连接中...</span>
+      <span id="myNameDisplay" style="font-size:12px;opacity:0.8;cursor:pointer;" title="点击修改昵称"></span>
+      <button class="btn-admin" id="btnAdmin">管理</button>
+    </div>
+  </div>
+
+  <div class="messages" id="messages">
+    <div class="connecting" id="connectingMsg"><span class="spinner"></span>正在连接聊天服务器...</div>
+  </div>
+
+  <div class="input-area">
+    <button class="btn btn-img" id="btnImg">+</button>
+    <input type="file" id="fileInput" accept="image/*" style="display:none">
+    <div id="previewContainer"></div>
+    <textarea id="msgInput" rows="1" placeholder="输入消息... (Enter 发送)"></textarea>
+    <button class="btn btn-send" id="btnSend">↑</button>
+  </div>
+</div>
+
+<div class="admin-overlay" id="adminOverlay">
+  <div class="admin-panel">
+    <div class="panel-header">
+      <h2>管理后台</h2>
+      <button class="btn-admin" id="btnClose" style="font-size:18px;">&times;</button>
+    </div>
+    <div class="panel-body" id="adminBody"></div>
+  </div>
+</div>
+
+<div class="lightbox" id="lightbox" onclick="this.classList.remove('active')">
+  <img id="lightboxImg" src="" alt="">
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.4/dist/mqtt.min.js"></script>
+<script>
+'use strict';
+
+// ============ CONFIG ============
+// SHA-256 hash of admin password. Default password: admin123
+// To change: console.log(await sha256('your-new-password')) and paste hash here
+const ADMIN_PASSWORD_HASH = '8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92';
+
+const MQTT_BROKER = 'wss://broker.emqx.io:8084/mqtt';
+const TOPIC_MSG = 'beechat/room1/msg';
+const TOPIC_DEL = 'beechat/room1/del';
+const TOPIC_CLR = 'beechat/room1/clr';
+const TOPIC_PRE = 'beechat/room1/pre';
+const TOPIC_PNG = 'beechat/room1/png';
+
+// ============ STATE ============
+var myIP = '';
+var clientId = '';
+var adminAuthed = false;
+var pendingImage = null;
+var onlineUsers = {};
+var messages = [];
+var myNickname = localStorage.getItem('beechat_nick') || '';
+
+// ============ DOM ============
+function $(id) { return document.getElementById(id); }
+
+// ============ SHA-256 ============
+async function sha256(text) {
+  var encoder = new TextEncoder();
+  var data = encoder.encode(text);
+  var hash = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hash)).map(function(b) { return b.toString(16).padStart(2,'0'); }).join('');
+}
+
+// ============ IP Detection ============
+async function detectIP() {
+  // Try multiple IP services (some blocked in China)
+  var services = [
+    'https://api.ipify.org?format=json',
+    'https://api64.ipify.org?format=json',
+    'https://httpbin.org/ip',
+    'https://api.ip.sb/ip'
+  ];
+  for (var i = 0; i < services.length; i++) {
+    try {
+      var r = await fetch(services[i]);
+      var d = await r.json();
+      myIP = d.ip || d.origin || '';
+      if (myIP) break;
+    } catch(e) {
+      console.log('IP service', services[i], 'failed');
+    }
+  }
+  if (!myIP) myIP = 'unknown';
+  clientId = myIP.replace(/\./g,'-') + '-' + Date.now() + '-' + Math.random().toString(36).slice(2,8);
+}
+
+// ============ MQTT ============
+var mqttClient;
+
+function connectMQTT() {
+  var brokers = [
+    'wss://broker-cn.emqx.io:8084/mqtt',
+    'wss://broker.emqx.io:8084/mqtt',
+    'ws://broker-cn.emqx.io:8083/mqtt',
+    'ws://broker.emqx.io:8083/mqtt',
+    'wss://test.mosquitto.org:8081',
+    'wss://broker.hivemq.com:8884/mqtt'
+  ];
+  var brokerIdx = 0;
+
+  function tryConnect() {
+    if (brokerIdx >= brokers.length) brokerIdx = 0;
+    var url = brokers[brokerIdx];
+    console.log('MQTT => ' + url);
+    var cEl = document.getElementById('connectingMsg');
+    if (cEl) cEl.innerHTML = '<span class="spinner"></span>尝试 ' + (brokerIdx+1) + '/' + brokers.length + ': ' + url.split('//')[1].split('/')[0] + '...';
+
+    try {
+      mqttClient = mqtt.connect(url, {
+        clientId: clientId,
+        clean: true,
+        connectTimeout: 5000,
+        reconnectPeriod: 0,
+        will: {
+          topic: TOPIC_PRE,
+          payload: JSON.stringify({ type: 'leave', ip: myIP, id: clientId }),
+          qos: 1, retain: false
+        }
+      });
+    } catch(e) {
+      console.log('MQTT connect error:', e);
+      setStatus('连接失败: ' + (e.message || e) + '，切换代理...');
+      brokerIdx++;
+      if (brokerIdx >= brokers.length) {
+        setStatus('所有代理均无法连接，请检查网络后刷新页面');
+        return;
+      }
+      setTimeout(tryConnect, 1000);
+      return;
+    }
+
+    mqttClient.on('connect', function() {
+      console.log('MQTT connected!');
+      mqttClient.subscribe([TOPIC_MSG, TOPIC_DEL, TOPIC_CLR, TOPIC_PRE, TOPIC_PNG], { qos: 1 }, function(err) {
+        if (!err) {
+          mqttClient.publish(TOPIC_PRE, JSON.stringify({ type: 'join', ip: myIP, id: clientId }), { qos: 1 });
+          mqttClient.publish(TOPIC_PNG, JSON.stringify({ type: 'ping', ip: myIP, id: clientId }), { qos: 1 });
+          updateConnStatus(true);
+          document.getElementById('messages').querySelector('.connecting') && (document.getElementById('messages').querySelector('.connecting').textContent = '已连接！发送第一条消息吧');
+        }
+      });
+    });
+
+    mqttClient.on('message', function(topic, payload) {
+      try {
+        var data = JSON.parse(payload.toString());
+        if (topic === TOPIC_MSG) handleMessage(data);
+        else if (topic === TOPIC_DEL) handleDelete(data);
+        else if (topic === TOPIC_CLR) handleClear();
+        else if (topic === TOPIC_PRE) handlePresence(data);
+        else if (topic === TOPIC_PNG) handlePing(data);
+      } catch(e) {}
+    });
+
+    mqttClient.on('close', function() {
+      updateConnStatus(false);
+      brokerIdx++;
+      if (brokerIdx >= brokers.length) brokerIdx = 0;
+      setTimeout(tryConnect, 2000);
+    });
+
+    mqttClient.on('error', function(err) {
+      console.log('MQTT error:', err.message || err);
+      if (mqttClient) { try { mqttClient.end(true); } catch(e) {} }
+    });
+  }
+
+  tryConnect();
+}
+
+function updateConnStatus(ok) {
+  var el = $('onlineCount');
+  if (ok) {
+    var cnt = Object.keys(onlineUsers).length;
+    el.textContent = cnt + ' 人在线';
+    el.style.background = 'rgba(255,255,255,0.2)';
+  } else {
+    el.textContent = '重连中...';
+    el.style.background = 'rgba(239,68,68,0.5)';
+  }
+}
+
+// ============ Presence ============
+function handlePresence(data) {
+  if (data.id === clientId) return;
+  if (data.type === 'join' || data.type === 'pong') {
+    onlineUsers[data.id] = { ip: data.ip, time: Date.now() };
+  } else if (data.type === 'leave') {
+    delete onlineUsers[data.id];
+  }
+  updateOnlineCount();
+}
+
+function handlePing(data) {
+  if (data.type === 'ping' && data.id !== clientId) {
+    onlineUsers[data.id] = { ip: data.ip, time: Date.now() };
+    updateOnlineCount();
+    if (mqttClient && mqttClient.connected) {
+      mqttClient.publish(TOPIC_PRE, JSON.stringify({ type: 'pong', ip: myIP, id: clientId }), { qos: 1 });
+    }
+  }
+}
+
+// cleanup stale users every 15s
+setInterval(function() {
+  var cutoff = Date.now() - 90000;
+  var changed = false;
+  for (var id in onlineUsers) {
+    if (onlineUsers[id].time < cutoff) { delete onlineUsers[id]; changed = true; }
+  }
+  if (changed) updateOnlineCount();
+}, 15000);
+
+// periodic ping every 45s
+setInterval(function() {
+  if (mqttClient && mqttClient.connected) {
+    mqttClient.publish(TOPIC_PNG, JSON.stringify({ type: 'ping', ip: myIP, id: clientId }), { qos: 1 });
+  }
+}, 45000);
+
+function updateOnlineCount() {
+  var cnt = Object.keys(onlineUsers).length;
+  $('onlineCount').textContent = cnt + ' 人在线';
+}
+
+// ============ Messages ============
+function handleMessage(data) {
+  data.id = data.id || (Date.now() + '-' + Math.random().toString(36).slice(2,10));
+  messages.push(data);
+  if (messages.length > 500) messages.shift();
+  appendMessage(data, true);
+}
+
+function handleDelete(data) {
+  for (var i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].id === data.messageId) { messages.splice(i, 1); break; }
+  }
+  removeMessageDOM(data.messageId);
+}
+
+function handleClear() {
+  messages.length = 0;
+  $('messages').innerHTML = '<div class="system-msg">管理员已清空聊天记录</div>';
+}
+
+function appendMessage(m, scroll) {
+  var msgsEl = $('messages');
+  var empty = msgsEl.querySelector('.empty,.connecting');
+  if (empty) empty.remove();
+
+  var div = document.createElement('div');
+  div.className = 'msg msg-other';
+  div.id = 'msg-' + m.id;
+
+  var html = '';
+  if (m.text) {
+    var linked = m.text.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;">$1</a>');
+    html += '<div class="text">' + linked + '</div>';
+  }
+  if (m.image) {
+    html += '<img class="msg-image" src="' + m.image + '" loading="lazy" onclick="openLightbox(this.src)">';
+  }
+  html += '<div class="nickname-tag">' + (m.nick || '匿名') + '</div>';
+  html += '<div class="meta-row"><span>' + formatTime(m.time) + '</span></div>';
+  div.innerHTML = html;
+  msgsEl.appendChild(div);
+  if (scroll) msgsEl.scrollTop = msgsEl.scrollHeight;
+}
+
+function removeMessageDOM(msgId) {
+  var el = document.getElementById('msg-' + msgId);
+  if (el) { el.style.opacity='0'; el.style.transform='scale(0.9)'; el.style.transition='0.2s'; setTimeout(function(){ el.remove(); },200); }
+}
+
+function formatTime(ts) {
+  var d = new Date(ts);
+  return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+}
+
+// ============ Send ============
+$('btnSend').addEventListener('click', sendMsg);
+$('msgInput').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); }
+});
+$('msgInput').addEventListener('input', function() {
+  this.style.height = 'auto';
+  this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+});
+
+function sendMsg() {
+  var text = $('msgInput').value.trim();
+  if (!text && !pendingImage) return;
+  if (!mqttClient || !mqttClient.connected) { showToast('连接断开，正在重连...'); return; }
+
+  var msg = {
+    id: Date.now() + '-' + Math.random().toString(36).slice(2,10),
+    text: text,
+    image: pendingImage || null,
+    ip: myIP,
+    nick: myNickname || '匿名',
+    time: Date.now()
+  };
+
+  mqttClient.publish(TOPIC_MSG, JSON.stringify(msg), { qos: 1 });
+
+  $('msgInput').value = '';
+  $('msgInput').style.height = 'auto';
+  pendingImage = null;
+  clearPreview();
+}
+
+// ============ Image ============
+$('btnImg').addEventListener('click', function() { $('fileInput').click(); });
+
+$('fileInput').addEventListener('change', function() {
+  var file = this.files[0];
+  if (!file) return;
+  this.value = '';
+
+  if (!file.type.startsWith('image/')) { showToast('仅支持图片格式'); return; }
+  if (file.size > 20 * 1024 * 1024) { showToast('图片最大20MB'); return; }
+
+  showToast('压缩中...');
+  compressToDataURL(file).then(function(dataUrl) {
+    pendingImage = dataUrl;
+    showPreview(dataUrl);
+    hideToast();
+  }).catch(function() {
+    showToast('图片处理失败');
+    pendingImage = null;
+  });
+});
+
+function compressToDataURL(file) {
+  return new Promise(function(resolve, reject) {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      var img = new Image();
+      img.onload = function() {
+        var maxW = 800, maxH = 800;
+        var w = img.width, h = img.height;
+        if (w > maxW || h > maxH) {
+          var ratio = Math.min(maxW / w, maxH / h);
+          w = Math.round(w * ratio);
+          h = Math.round(h * ratio);
+        }
+        var canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        var mime = file.type === 'image/jpeg' ? 'image/jpeg' : 'image/webp';
+        var quality = file.type === 'image/jpeg' ? 0.75 : 0.7;
+        resolve(canvas.toDataURL(mime, quality));
+      };
+      img.onerror = function() { reject(new Error('load fail')); };
+      img.src = e.target.result;
+    };
+    reader.onerror = function() { reject(new Error('read fail')); };
+    reader.readAsDataURL(file);
+  });
+}
+
+function showPreview(dataUrl) {
+  clearPreview();
+  var wrap = document.createElement('div');
+  wrap.className = 'img-preview';
+  var img = document.createElement('img');
+  img.src = dataUrl;
+  var btn = document.createElement('button');
+  btn.className = 'remove-btn';
+  btn.textContent = 'x';
+  btn.onclick = removePreview;
+  wrap.appendChild(img);
+  wrap.appendChild(btn);
+  $('previewContainer').appendChild(wrap);
+}
+
+function clearPreview() { $('previewContainer').innerHTML = ''; }
+
+function removePreview() { pendingImage = null; clearPreview(); }
+
+// ============ Lightbox ============
+function openLightbox(src) {
+  $('lightbox').classList.add('active');
+  $('lightboxImg').src = src;
+}
+
+// ============ Toast ============
+var toastTimer;
+function showToast(msg) {
+  var t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function() { t.classList.remove('show'); }, 2500);
+}
+function hideToast() { $('toast').classList.remove('show'); }
+
+// ============ Admin ============
+$('btnAdmin').addEventListener('click', openAdmin);
+$('btnClose').addEventListener('click', function() { $('adminOverlay').classList.remove('active'); });
+$('adminOverlay').addEventListener('click', function(e) { if (e.target === $('adminOverlay')) $('adminOverlay').classList.remove('active'); });
+
+function openAdmin() {
+  $('adminOverlay').classList.add('active');
+  if (adminAuthed) { renderAdminPanel(); }
+  else { renderAdminLogin(); }
+}
+
+function renderAdminLogin() {
+  adminAuthed = false;
+  $('adminBody').innerHTML = '' +
+    '<div class="login-form">' +
+    '<h3>🔒 管理员登录</h3>' +
+    '<input type="password" id="adminPW" placeholder="输入管理密码" autocomplete="off">' +
+    '<button class="btn-login" id="btnLogin">登录</button>' +
+    '<div class="error" id="loginErr"></div>' +
+    '</div>';
+  $('btnLogin').addEventListener('click', doAdminLogin);
+  $('adminPW').addEventListener('keydown', function(e) { if (e.key === 'Enter') doAdminLogin(); });
+}
+
+async function doAdminLogin() {
+  var pw = $('adminPW').value;
+  var errEl = $('loginErr');
+  if (!pw) { errEl.textContent = '请输入密码'; return; }
+  var hash = await sha256(pw);
+  if (hash === ADMIN_PASSWORD_HASH) {
+    adminAuthed = true;
+    renderAdminPanel();
+  } else {
+    errEl.textContent = '密码错误';
+  }
+}
+
+function renderAdminPanel() {
+  var userEntries = Object.entries(onlineUsers);
+  var userHTML = '';
+  if (userEntries.length === 0) {
+    userHTML = '<div style="font-size:13px;color:var(--text-secondary);">暂无其他在线用户</div>';
+  } else {
+    for (var i = 0; i < userEntries.length; i++) {
+      var u = userEntries[i];
+      userHTML += '<div class="online-user"><span class="dot"></span><span class="id">' + escapeHTML(u[0].slice(0,24)) + '</span><span class="ip">' + escapeHTML(u[1].ip) + '</span></div>';
+    }
+  }
+
+  var msgHTML = '';
+  if (messages.length === 0) {
+    msgHTML = '<div style="font-size:13px;color:var(--text-secondary);">暂无消息</div>';
+  } else {
+    for (var j = messages.length - 1; j >= 0; j--) {
+      var m = messages[j];
+      var content = (m.nick || '匿名') + ': ' + (m.text || (m.image ? '[图片]' : ''));
+      msgHTML += '' +
+        '<div class="admin-msg" id="admin-' + m.id + '">' +
+        '<span class="content">' + escapeHTML(content) + '</span>' +
+        '<span class="ip">' + escapeHTML(m.ip || 'unknown') + '</span>' +
+        '<span class="meta">' + formatTime(m.time) + '</span>' +
+        '<button class="btn-sm btn-danger" data-id="' + m.id + '" onclick="adminDeleteMsg(this.dataset.id)">删除</button>' +
+        '</div>';
+    }
+  }
+
+  $('adminBody').innerHTML = '' +
+    '<div class="admin-section">' +
+    '<h3>🖥 在线用户 (' + userEntries.length + ')</h3>' +
+    userHTML +
+    '</div>' +
+    '<div class="admin-section">' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">' +
+    '<h3>💬 消息记录 (' + messages.length + ')</h3>' +
+    '<button class="btn-sm btn-danger" onclick="adminClearAll()">⚠ 清空全部</button>' +
+    '</div>' +
+    msgHTML +
+    '</div>';
+}
+
+function adminDeleteMsg(msgId) {
+  if (!mqttClient || !mqttClient.connected) { showToast('连接断开'); return; }
+  mqttClient.publish(TOPIC_DEL, JSON.stringify({ messageId: msgId }), { qos: 1 });
+  var el = document.getElementById('admin-' + msgId);
+  if (el) el.remove();
+  showToast('已删除');
+}
+
+function adminClearAll() {
+  if (!confirm('确定清空所有聊天记录？此操作不可撤销。')) return;
+  if (!mqttClient || !mqttClient.connected) { showToast('连接断开'); return; }
+  mqttClient.publish(TOPIC_CLR, JSON.stringify({}), { qos: 1 });
+  showToast('已清空');
+}
+
+window.adminDeleteMsg = adminDeleteMsg;
+window.adminClearAll = adminClearAll;
+
+function escapeHTML(str) {
+  var div = document.createElement('div');
+  div.appendChild(document.createTextNode(str));
+  return div.innerHTML;
+}
+
+// ============ Nickname ============
+function showNicknamePrompt() {
+  var existing = document.getElementById('nicknameModal');
+  if (existing) existing.remove();
+  var modal = document.createElement('div');
+  modal.id = 'nicknameModal';
+  modal.className = 'nickname-modal';
+  modal.innerHTML = '<div class="nickname-box"><h3>设置你的昵称</h3><input type="text" id="nicknameInput" placeholder="输入昵称（2-12字）" maxlength="12" value="' + myNickname + '"><button id="nicknameBtn">确认</button></div>';
+  document.body.appendChild(modal);
+  document.getElementById('nicknameBtn').addEventListener('click', function() {
+    var name = document.getElementById('nicknameInput').value.trim();
+    if (name.length < 2) { alert('昵称至少2个字符'); return; }
+    myNickname = name;
+    localStorage.setItem('beechat_nick', name);
+    document.getElementById('myNameDisplay').textContent = name;
+    modal.remove();
+  });
+  document.getElementById('nicknameInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') document.getElementById('nicknameBtn').click();
+  });
+  setTimeout(function() { document.getElementById('nicknameInput').focus(); }, 100);
+}
+
+// ============ Init ============
+var connStatusEl = document.getElementById('connectingMsg');
+function setStatus(msg) {
+  console.log('[BeeChat] ' + msg);
+  if (connStatusEl) connStatusEl.innerHTML = '<span class="spinner"></span>' + msg;
+}
+
+function initApp() {
+  // Show nickname in header
+  var nd = document.getElementById('myNameDisplay');
+  if (nd) {
+    nd.textContent = myNickname || '设置昵称';
+    nd.addEventListener('click', showNicknamePrompt);
+  }
+  // Prompt if no nickname set
+  if (!myNickname) {
+    setTimeout(showNicknamePrompt, 800);
+  }
+  if (typeof mqtt === 'undefined') {
+    setStatus('加载 MQTT 库中...');
+    setTimeout(initApp, 300);
+    return;
+  }
+  setStatus('MQTT 库已加载，获取 IP...');
+  detectIP().then(function() {
+    setStatus('IP: ' + myIP + '，开始连接...');
+    connectMQTT();
+  }).catch(function(e) {
+    setStatus('IP 获取失败: ' + (e.message || e) + '，使用默认IP连接...');
+    myIP = 'unknown';
+    clientId = 'u-' + Date.now() + '-' + Math.random().toString(36).slice(2,8);
+    connectMQTT();
+  });
+}
+
+// Fallback: if mqtt CDN fails to load after 10s, try alternate CDN
+var mqttLoadAttempts = 0;
+function mqttFallback() {
+  if (typeof mqtt !== 'undefined') return;
+  mqttLoadAttempts++;
+  if (mqttLoadAttempts <= 2) {
+    setStatus('CDN 加载失败，尝试备用 CDN (' + mqttLoadAttempts + ')...');
+    var script = document.createElement('script');
+    script.src = mqttLoadAttempts === 1
+      ? 'https://cdn.bootcdn.net/ajax/libs/mqtt/5.10.4/mqtt.min.js'
+      : 'https://cdn.staticfile.org/mqtt/5.10.4/mqtt.min.js';
+    script.onload = function() { setStatus('备用 CDN 加载成功'); };
+    script.onerror = function() { setStatus('备用 CDN 也加载失败'); };
+    document.head.appendChild(script);
+  } else {
+    setStatus('无法加载 MQTT 库，请检查网络连接后刷新页面');
+  }
+}
+setTimeout(mqttFallback, 8000);
+
+initApp();
+</script>
+</body>
+</html>
